@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Metro Route Finder</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#14213d;--muted:#5b6578;--rule:#d9dee7;--m1:#1f6feb;--m2:#e8590c;--b10:#12a37f;--accent:#14213d;--onaccent:#fff;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1420;--card:#171e2e;--ink:#e8ecf4;--muted:#9aa5ba;--rule:#2a3448;--m1:#5b9bff;--m2:#ff8a4c;--b10:#2ed3a6;--accent:#e8ecf4;--onaccent:#0f1420}}
+:root[data-theme="dark"]{--bg:#0f1420;--card:#171e2e;--ink:#e8ecf4;--muted:#9aa5ba;--rule:#2a3448;--m1:#5b9bff;--m2:#ff8a4c;--b10:#2ed3a6;--accent:#e8ecf4;--onaccent:#0f1420}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Atkinson Hyperlegible","Noto Sans Telugu",system-ui,sans-serif;line-height:1.5}
+main{max-width:860px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:1.6rem;margin:0 0 4px;letter-spacing:-.01em}
+h2{font-size:1.05rem;margin:0 0 10px}
+.sub{color:var(--muted);margin:0 0 18px}
+.panel{background:var(--card);border:1px solid var(--rule);border-radius:12px;padding:14px;margin-bottom:14px}
+.controls{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:end}
+label{display:block;font-size:.85rem;color:var(--muted);margin-bottom:4px}
+select{width:100%;padding:10px;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--rule);border-radius:8px}
+button{font:inherit;cursor:pointer;color:var(--ink)}
+.swap{padding:10px 12px;background:var(--bg);border:1px solid var(--rule);border-radius:8px}
+.seg{display:flex;gap:0;margin-top:12px;border:1px solid var(--rule);border-radius:8px;overflow:hidden;width:fit-content}
+.seg button{padding:8px 18px;background:var(--bg);border:0}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--onaccent);font-weight:700}
+:focus-visible{outline:3px solid var(--m1);outline-offset:2px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.stat{border:1px solid var(--rule);border-radius:8px;padding:8px 10px}
+.stat b{display:block;font-size:1.5rem;line-height:1.2}
+.stat span{font-size:.8rem;color:var(--muted)}
+ol.it{margin:0;padding:0;list-style:none}
+ol.it li{padding:6px 0 6px 14px;border-left:4px solid var(--rule);margin-left:4px}
+ol.it li.M1{border-color:var(--m1)}ol.it li.M2{border-color:var(--m2)}ol.it li.B10{border-color:var(--b10)}
+.map{overflow-x:auto}
+svg{width:100%;height:auto;min-width:520px;display:block}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.85rem;color:var(--muted);margin-top:8px}
+.legend i{display:inline-block;width:22px;height:4px;border-radius:2px;vertical-align:middle;margin-right:6px}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:480px;font-size:.92rem}
+th,td{padding:8px 10px;border-bottom:1px solid var(--rule);text-align:right}
+th:first-child,td:first-child{text-align:left}
+tr.on td{background:color-mix(in srgb,var(--m1) 14%,transparent);font-weight:700}
+.note{color:var(--muted);font-size:.88rem;margin:10px 0 0}
+</style>
+</head>
+<body>
+<main>
+<h1>Metro Route Finder</h1>
+<p class="sub">Fastest route across the M1, M2 and B10 lines, with a 5-minute penalty for every line change.</p>
+
+<section class="panel">
+  <div class="controls">
+    <div><label for="src">From</label><select id="src"></select></div>
+    <button class="swap" id="swap" aria-label="Swap from and to">⇄</button>
+    <div><label for="dst">To</label><select id="dst"></select></div>
+  </div>
+  <div class="seg" role="group" aria-label="Algorithm">
+    <button id="bA" aria-pressed="true">A* search</button>
+    <button id="bU" aria-pressed="false">Uniform-cost</button>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Network map</h2>
+  <div class="map"><svg id="map" viewBox="0 0 700 420" role="img" aria-label="Map of seven stations on three lines"></svg></div>
+  <div class="legend"><span><i style="background:var(--m1)"></i>M1 metro</span><span><i style="background:var(--m2)"></i>M2 metro</span><span><i style="background:var(--b10)"></i>B10 bus</span></div>
+</section>
+
+<section class="panel" id="result"></section>
+
+<section class="panel">
+  <h2>UCS and A* on the four test queries</h2>
+  <div class="tbl"><table id="cmp"></table></div>
+  <p class="note">Both algorithms always find the same travel time. A* expands fewer states because the straight-line heuristic steers it toward the destination.</p>
+</section>
+</main>
+
+<script>
+const C={Airport:[0,6],Central:[8,6],Market:[13,4],University:[20,4],Harbor:[2,0],Park:[13,10],Stadium:[21,12]};
+const E=[["Airport","Central","M1",12],["Central","Market","M1",6],["Market","University","M1",8],["Harbor","Central","M2",10],["Central","Park","M2",7],["Park","Stadium","M2",9],["Market","Park","B10",11],["Park","Stadium","B10",12]];
+const P=5,VMAX=1.0,COL={M1:"var(--m1)",M2:"var(--m2)",B10:"var(--b10)"};
+const G={};Object.keys(C).forEach(s=>G[s]=[]);
+E.forEach(([a,b,l,t])=>{G[a].push([b,l,t]);G[b].push([a,l,t]);});
+const H=(s,g)=>Math.hypot(C[s][0]-C[g][0],C[s][1]-C[g][1])/VMAX;
+
+function search(start,goal,astar){
+  const h=s=>astar?H(s,goal):0, key=s=>s[0]+"|"+s[1];
+  let n=0;const s0=[start,null];
+  let fr=[{f:h(start),n:n++,g:0,st:s0}];
+  const best={[key(s0)]:0},parent={[key(s0)]:null};let expanded=0;
+  while(fr.length){
+    fr.sort((a,b)=>a.f-b.f||a.n-b.n);
+    const {g,st}=fr.shift();
+    if(g>best[key(st)])continue;
+    const [sta,line]=st;
+    if(sta===goal){const path=[];let c=st;while(c){path.push(c);c=parent[key(c)];}return{path:path.reverse(),cost:g,expanded};}
+    expanded++;
+    for(const [nx,rl,t] of G[sta]){
+      const pen=(line!==null&&line!==rl)?P:0,ng=g+t+pen,ns=[nx,rl],k=key(ns);
+      if(!(k in best)||ng<best[k]){best[k]=ng;parent[k]=st;fr.push({f:ng+h(nx),n:n++,g:ng,st:ns});}
+    }
+  }
+  return null;
+}
+const transfers=p=>{const L=p.slice(1).map(s=>s[1]);let c=0;for(let i=1;i<L.length;i++)if(L[i]!==L[i-1])c++;return c;};
+function itinerary(p){
+  const out=[{t:"Start at "+p[0][0],l:""}];let prev=null;
+  p.slice(1).forEach(([st,l])=>{
+    if(prev===null)out.push({t:"Board "+l+" to "+st,l});
+    else if(l!==prev)out.push({t:"Change "+prev+" to "+l+" (+"+P+" min), ride to "+st,l});
+    else out.push({t:"Continue on "+l+" to "+st,l});
+    prev=l;
+  });
+  return out;
+}
+
+const names=Object.keys(C);
+const src=document.getElementById("src"),dst=document.getElementById("dst");
+names.forEach(n=>{src.add(new Option(n,n));dst.add(new Option(n,n));});
+src.value="Airport";dst.value="Stadium";
+let astar=true;
+const QS=[["Airport","Stadium"],["Harbor","University"],["University","Harbor"],["Airport","Harbor"]];
+
+const px=s=>40+C[s][0]*28, py=s=>40+(12-C[s][1])*28;
+const LBL={Airport:[0,-14,"middle"],Central:[0,-16,"middle"],Market:[0,24,"middle"],University:[0,24,"middle"],Harbor:[14,5,"start"],Park:[-14,-8,"end"],Stadium:[0,-14,"middle"]};
+
+function drawMap(path){
+  const used=new Set();
+  if(path)for(let i=1;i<path.length;i++){used.add(path[i-1][0]+"|"+path[i][0]+"|"+path[i][1]);used.add(path[i][0]+"|"+path[i-1][0]+"|"+path[i][1]);}
+  const onRoute=new Set(path?path.map(s=>s[0]):[]);
+  let h="";
+  E.forEach(([a,b,l])=>{
+    const dbl=(a==="Park"&&b==="Stadium"),off=dbl?(l==="M2"?5:-5):0;
+    const on=used.has(a+"|"+b+"|"+l),dim=path&&!on;
+    h+=`<line x1="${px(a)}" y1="${py(a)+off}" x2="${px(b)}" y2="${py(b)+off}" stroke="${COL[l]}" stroke-width="${on?8:4}" stroke-linecap="round" ${l==="B10"?'stroke-dasharray="9 6"':""} opacity="${dim?.3:1}"/>`;
+  });
+  names.forEach(s=>{
+    const tr=["Central","Market","Park"].includes(s),r=tr?10:7,on=onRoute.has(s),[dx,dy,an]=LBL[s];
+    h+=`<circle cx="${px(s)}" cy="${py(s)}" r="${r}" fill="${tr?"var(--ink)":"var(--card)"}" stroke="var(--ink)" stroke-width="3"/>`;
+    if(on)h+=`<circle cx="${px(s)}" cy="${py(s)}" r="${r+6}" fill="none" stroke="var(--ink)" stroke-width="2"/>`;
+    h+=`<text x="${px(s)+dx}" y="${py(s)+dy}" text-anchor="${an}" font-size="15" font-weight="${on?700:400}" fill="var(--ink)">${s}</text>`;
+  });
+  document.getElementById("map").innerHTML=h;
+}
+
+function render(){
+  const a=src.value,b=dst.value,box=document.getElementById("result");
+  if(a===b){drawMap(null);box.innerHTML="<h2>Route</h2><p>Pick two different stations.</p>";renderTable();return;}
+  const r=search(a,b,astar),o=search(a,b,!astar);
+  drawMap(r.path);
+  const li=itinerary(r.path).map(x=>`<li class="${x.l}">${x.t}</li>`).join("");
+  const other=astar?"Uniform-cost":"A*";
+  box.innerHTML=`<h2>${a} to ${b} (${astar?"A*":"Uniform-cost"})</h2>
+  <div class="stats"><div class="stat"><b>${r.cost} min</b><span>Travel time</span></div><div class="stat"><b>${transfers(r.path)}</b><span>Transfers</span></div><div class="stat"><b>${r.expanded}</b><span>States expanded</span></div></div>
+  <ol class="it">${li}</ol>
+  <p class="note">${other} gives ${o.cost} min and expands ${o.expanded} states for this trip.</p>`;
+  renderTable();
+}
+function renderTable(){
+  let h="<tr><th>Query</th><th>UCS time</th><th>A* time</th><th>UCS expanded</th><th>A* expanded</th></tr>";
+  QS.forEach(([s,d])=>{
+    const u=search(s,d,false),a=search(s,d,true),on=(s===src.value&&d===dst.value);
+    h+=`<tr class="${on?"on":""}"><td>${s} to ${d}</td><td>${u.cost}</td><td>${a.cost}</td><td>${u.expanded}</td><td>${a.expanded}</td></tr>`;
+  });
+  document.getElementById("cmp").innerHTML=h;
+}
+src.onchange=dst.onchange=render;
+document.getElementById("swap").onclick=()=>{const t=src.value;src.value=dst.value;dst.value=t;render();};
+function setAlgo(v){astar=v;document.getElementById("bA").setAttribute("aria-pressed",v);document.getElementById("bU").setAttribute("aria-pressed",!v);render();}
+document.getElementById("bA").onclick=()=>setAlgo(true);
+document.getElementById("bU").onclick=()=>setAlgo(false);
+render();
+</script>
+</body>
+</html>
